@@ -99,7 +99,7 @@ def v2networkx(filePath):
 def remove_wires(G):
     remove_list = []
     for n in G.nodes:
-        if G.nodes[n]['type'] == 'wire':
+        if G.nodes[n]["type"] == "wire":
             if G.in_degree(n) > 1:
                 exit("the wire %s is driven by more than one gates!", n)
             remove_list.append(n)
@@ -114,12 +114,12 @@ def test(argv):
     print("v2networkx done!")
     print(nx.info(G))
     remove_wires(G)
-    print(nx.info(G))
-    S = {"i_2_0_13_0"}
-    T = {"o_2_0_0_0"}
-    print(nx.cut_size(G, S, T))
-    nx.draw(G, with_labels=True)
-    plt.savefig("test.png")
+    # print(nx.info(G))
+    # S = {"i_2_0_13_0"}
+    # T = {"o_2_0_0_0"}
+    # print(nx.cut_size(G, S, T))
+    # nx.draw(G, with_labels=True)
+    # plt.savefig("test.png")
 
 if __name__ == "__main__":
     test(sys.argv)
