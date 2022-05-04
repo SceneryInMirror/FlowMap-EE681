@@ -57,14 +57,16 @@ def construct_Nt_pp(Nt_p, t):
     # min_cut = nx.minimum_cut(Nt_pp, "s", t) # TODO: we can change this function to edmonds_karp() or shortest_augmenting_path()
     min_cut = nx.minimum_cut(Nt_pp, "s", t, flow_func=edmonds_karp)
     # min_cut = nx.minimum_cut(Nt_pp, "s", t, flow_func=shortest_augmenting_path)
+    
+    # DEBUG:
     # if min_cut[0] <= K:
-        # print("Mincut for node %s: \nMincut size: %d\nMincut clusters: %s\n" % (t, min_cut[0], min_cut[1]))
+    #     print("Mincut for node %s: \nMincut size: %d\nMincut clusters: %s\n" % (t, min_cut[0], min_cut[1]))
 
     return min_cut
 
 
 def xt_xtbar_generation(G, Nt, n, min_cut):
-    if G.nodes[n]["mincut"]:
+    if G.nodes[n]["mincut"]: # for nodes that have K-mincut
         
         ## generate Xt and Xt_bar sets for node n
         xt = min_cut[1][0].copy()
@@ -84,7 +86,7 @@ def xt_xtbar_generation(G, Nt, n, min_cut):
         #     else:
         #         G.nodes[i]["cut_overlapping"] = n
 
-    else:
+    else: # for nodes that do not have K-mincut
         G.nodes[n]["xtbar"] = [n]
         xt = []
         for i in Nt.nodes:
@@ -102,7 +104,7 @@ def labeling(G):
         cut_size = INF
         # min_cut = None
         # Nt = None
-        for anc in nx.ancestors(G, n): # TODO: should we use predecessors, or ancestors?
+        for anc in nx.ancestors(G, n): # ancestors are all the nodes in the fanin cone
             max_l = max(G.nodes[anc]["label"], max_l)
         
         if max_l < 0: # for inputs
@@ -130,46 +132,39 @@ def labeling(G):
             for anc in nx.ancestors(Nt, n):
                 if Nt.nodes[anc]["label"] == max_l:
                     merge(Nt_p, n, anc)
-            # for anc in nx.ancestors(Nt, n):
-            #     if Nt.nodes[anc]["label"] == max_l:
-            #         for in_node, _ in G.in_edges(anc):
-            #             Nt_p.add_edge(in_node, n)
-            # for anc in nx.ancestors(Nt, n):
-            #     if Nt.nodes[anc]["label"] == max_l:
-            #         Nt_p.remove_node(anc)
             
             ## construct Nt'', which may be not needed
             min_cut = construct_Nt_pp(Nt_p, n)
             cut_size = min_cut[0]
 
             ## assign label to the node t according to the minimum cut size
-            if cut_size <= K:
+            if cut_size <= K: # if there exists a K-mincut, the label will be the same
                 G.nodes[n]["label"] = max_l
                 G.nodes[n]["mincut"] = min_cut
                 xt_xtbar_generation(G, Nt, n, min_cut)
-            else:
+            else: # otherwise, the new label will be the maximum label + 1
                 G.nodes[n]["label"] = max_l + 1
                 G.nodes[n]["mincut"] = None
                 xt_xtbar_generation(G, Nt, n, min_cut)
 
-    ## print all information about nodes after labeling
     cust_print("Graph info after labeling")
 
 
-def insert_KLUT(LUT_G, G, n, mapping_list, collapse_list):
+def insert_KLUT(LUT_G, G, n, mapping_list):
+    ## insert a new lut node if not exist
     if LUT_G.has_node(n): pass
     else:
         LUT_G.add_node(n, type="lut")
     in_nodes = []
+
+    ## find all nodes outside Xt_bar that have direct connections to Xt_bar
     for i in G.nodes[n]["xtbar"]:
-        # if i not in collapse_list:
-            # collapse_list.append(i)
         for in_node, _ in G.in_edges(i):
             if in_node not in in_nodes and in_node not in G.nodes[n]["xtbar"]:
                 in_nodes.append(in_node)
+    
+    ## connect all input nodes to the new lut node, and will create luts for these input nodes later if not PIs
     for i in in_nodes:
-        # if i in collapse_list:
-            # collapse_list.remove(i)
         if i not in mapping_list and G.nodes[i]["type"] != "input":
             mapping_list.append(i)
         if LUT_G.has_node(i): pass
@@ -182,23 +177,23 @@ def insert_KLUT(LUT_G, G, n, mapping_list, collapse_list):
 
 def mapping(G):
     mapping_list = []
-    collapse_list = []
     LUT_G = nx.DiGraph()
+    ## starting from POs, construct the KLUT graph
     for n in G.nodes:
         if G.nodes[n]["type"] == "output":
             mapping_list.append(n) 
     while(len(mapping_list)):
         current_n = mapping_list.pop(0)
-        # if (current_n in collapse_list): continue
-        insert_KLUT(LUT_G, G, current_n, mapping_list, collapse_list)
-        print(LUT_G.in_degree(current_n))
+        insert_KLUT(LUT_G, G, current_n, mapping_list)
+        # print(LUT_G.in_degree(current_n))
     return LUT_G
     
 
-def merge(G, lut, pred):
-    for in_node, _ in G.in_edges(pred):
-        G.add_edge(in_node, lut)
-    G.remove_node(pred)
+def merge(G, t, c):
+    ## merge the node that will be collapsed into the target node
+    for in_node, _ in G.in_edges(c):
+        G.add_edge(in_node, t)
+    G.remove_node(c)
 
 
 def predecessor_packing(LUT_G):
@@ -212,23 +207,21 @@ def predecessor_packing(LUT_G):
     while (True):
         for lut in node_list:  
             if lut in collapsed_lut: continue
+            ## merge lut with a fanout-free predecessor lut, if their total input size is not larger than K
             for pred, _ in LUT_GG.in_edges(lut):
                 if LUT_GG.out_degree(pred) == 1 and LUT_GG.nodes[pred]["type"] != "input": # the predecessor is fanout-free
                     if G.in_degree(pred) + G.in_degree(lut) <= K:
-                        # G = nx.contracted_nodes(G, lut, pred)
                         merge(G, lut, pred)
                         if lut not in new_node_list:
                             new_node_list.append(lut)
                         collapsed_lut.append(pred)
-
-
             LUT_GG = G.copy()
 
         node_list = new_node_list.copy()
         new_node_list.clear()
         if (len(node_list) == 0): break
 
-    print(nx.info(LUT_GG))
+    # print(nx.info(LUT_GG))
     return LUT_GG
 
 
@@ -243,6 +236,7 @@ def gate_decomposition(LUT_G):
     while (True):
         for lut in node_list:  
             if lut in collapsed_lut: continue
+            ## merge two predecessors if their total input size is not larger than K and both of them are fanout-free
             for pred1, _ in LUT_GG.in_edges(lut):
                 for pred2, __ in LUT_GG.in_edges(lut):
                     if (pred1 == pred2): continue
@@ -260,11 +254,12 @@ def gate_decomposition(LUT_G):
         new_node_list.clear()
         if (len(node_list) == 0): break
     
-    print(nx.info(LUT_GG))
+    # print(nx.info(LUT_GG))
     return LUT_GG
 
 
 def merge_LUTs(LUT_G, KLUT_n_input, i, j):
+    ## this function is used for merging two K-input one-output luts into a K-input two-output lut, if their total input size is not larger than K
     global K
     if i + j > K:
         exit("Error!")
@@ -301,6 +296,7 @@ def merge_LUTs(LUT_G, KLUT_n_input, i, j):
 
 
 def KLUT_two_outputs_mapping(LUT_G):
+    ## find all luts that have input size smaller than K, and merge them into two-output luts
     global K
     KLUT_n_input = {}
     KLUT_n_input[1] = []
@@ -312,7 +308,7 @@ def KLUT_two_outputs_mapping(LUT_G):
         if LUT_G.nodes[lut]["type"] == "lut" and LUT_G.in_degree(lut) < K:
             KLUT_n_input[LUT_G.in_degree(lut)].append(lut)
     
-    # This can be applied for K = 6 only
+    # This part is hardcoded for K=6
     merge_LUTs(LUT_G, KLUT_n_input, 1, 5)
     merge_LUTs(LUT_G, KLUT_n_input, 2, 4)
     merge_LUTs(LUT_G, KLUT_n_input, 3, 3)
@@ -327,10 +323,21 @@ def test(argv):
     G = v2n.v2networkx(argv[1]) # generate a networkx graph from the netlist, where both gates, IOs, wires are nodes
     v2n.remove_wires(G) # remove nodes that represent wires in the netlist
     cust_print("v2networkx done!")
-    
     labeling(G) # assign label to each node
-
     LUT_G = mapping(G)
+
+
+def nx_graph_info(G):
+    n_nodes = len(G.nodes)
+    n_edges = len(G.edges)
+    n_inputs = 0
+    for n in G.nodes:
+        if G.nodes[n]["type"] == "input":
+            n_inputs += 1
+    print("Number of nodes:", n_nodes)
+    print("Number of edges:", n_edges)
+    print("Number of inputs:", n_inputs)
+    print("Number of LUTs:", (n_nodes - n_inputs))
 
 
 def main(argv):
@@ -340,14 +347,6 @@ def main(argv):
     cust_print("v2networkx done!")
     labeling(G) # assign label to each node
     LUT_G = mapping(G)
-
-    # for n in G.nodes:
-    #     print(n)
-    #     for i in G.nodes[n]["xt"]:
-    #         if (len(i) < 2): print("Error")
-    #     for i in G.nodes[n]["xtbar"]:
-    #         if (len(i) < 2): print("Error")
-    # exit()
 
     # cnt = 0
     # cnt0 = 0
@@ -361,34 +360,13 @@ def main(argv):
 
     LUT_G2 = predecessor_packing(LUT_G)
     LUT_G3 = gate_decomposition(LUT_G2)
-
-    # cnt = 0
-    # cnt0 = 0
-    # for n in LUT_G2.nodes:
-    #     if LUT_G2.in_degree(n) < K and LUT_G2.nodes[n]["type"] != "input":
-    #         cnt += 1
-    #     if LUT_G2.in_degree(n) == 0 and LUT_G2.nodes[n]["type"] != "input":
-    #         cnt0 += 1
-    # print(cnt, cnt0)    
-
     LUT_G4 = predecessor_packing(LUT_G3)
     LUT_G5 = gate_decomposition(LUT_G4)
-    cnt = 0
-    cnt0 = 0
-    for n in LUT_G5.nodes:
-        if LUT_G5.in_degree(n) < K and LUT_G5.nodes[n]["type"] != "input":
-            cnt += 1
-        if LUT_G5.in_degree(n) == 0 and LUT_G2.nodes[n]["type"] != "input":
-            cnt0 += 1
-    print(cnt, cnt0)
-    # LUT_GG = gate_decomposition(LUT_G)
-    # LUT_GGG = predecessor_packing(LUT_GG)
-    # LUT_GGG = predecessor_packing(LUT_GG)
-    # LUT_GGGG = predecessor_packing(LUT_GGG)
-    # postprocessing(LUT_G)
 
     KLUT_two_outputs_mapping(LUT_G5)
-    print(nx.info(LUT_G5))
+    cust_print("Information about the KLUT design")
+    nx_graph_info(LUT_G5)
+
     cnt1 = 0
     cnt2 = 0
     for l in LUT_G5.nodes:
@@ -396,14 +374,12 @@ def main(argv):
             cnt2 += 1
         elif LUT_G5.nodes[l]["type"] == "lut":
             cnt1 += 1
-    print(cnt1, cnt2)
-
+    print("%d 1-output KLUT and %d 2-output KLUT have been used." % (cnt1, cnt2))
 
 
 if __name__ == "__main__":
-    # test(sys.argv)
     ts = time.time()
     main(sys.argv)
     te = time.time()
-    print(te - ts)
+    cust_print("running time: %f" % (te - ts))
     
