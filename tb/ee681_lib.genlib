@@ -1,0 +1,9 @@
+GATE AND	7000	O=a*b;				PIN * NONINV 		16 	999 8.4 0.0 8.4 0.0 
+GATE NAND	7000	O=!(a*b);			PIN * INV 		16 	999 8.4 0.0 8.4 0.0 
+GATE OR	7000	O=a+b;				PIN * NONINV 		14 	999 6.1 0.0 6.1 0.0 
+GATE XOR	7000	O=a*!b+!a*b;			PIN * UNKNOWN 		18 	999 5.8 0.0 5.8 0.0 
+GATE NOT	7000	O=!a;				PIN * INV 		12 	999 13.2 0.0 13.2 0.0 
+GATE DFFT	5600	O=!(!a);    			PIN * NONINV 		10 	999 10.4 0.0 10.4 0.0 
+GATE Splitter	5600	O=!(!a);    			PIN * NONINV 		10 	999 10.4 0.0 10.4 0.0 
+GATE zero	0	O=CONST0;
+GATE one	0	O=CONST1;
