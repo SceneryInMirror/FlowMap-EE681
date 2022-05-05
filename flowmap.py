@@ -340,11 +340,29 @@ def nx_graph_info(G):
     print("Number of LUTs:", (n_nodes - n_inputs))
 
 
+def verilog_info(G):
+    n_nodes = len(G.nodes)
+    n_edges = len(G.edges)
+    n_inputs = 0
+    n_outputs = 0
+    for n in G.nodes:
+        if G.nodes[n]["type"] == "input":
+            n_inputs += 1
+        elif G.nodes[n]["type"] == "output":
+            n_outputs += 1
+    print("Number of nodes:", n_nodes)
+    print("Number of edges:", n_edges)
+    print("Number of inputs:", n_inputs)
+    print("Number of outputs:", n_outputs)
+    print("Number of gates:", (n_nodes - n_inputs - n_outputs))
+
+
 def main(argv):
     global K
     G = v2n.v2networkx(argv[1]) # generate a networkx graph from the netlist, where both gates, IOs, wires are nodes
     v2n.remove_wires(G) # remove nodes that represent wires in the netlist
     cust_print("v2networkx done!")
+    verilog_info(G)
     labeling(G) # assign label to each node
     LUT_G = mapping(G)
 

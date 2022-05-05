@@ -55,7 +55,7 @@ def v2networkx(filePath):
             gate_name = re.split(r"\s+", gate.group())[2]
             G.add_node(gate_name,type = gate_type)
             ## for one-input gates (INV and BUF)
-            if ("NOT" in gate_type) or ("BUF" in gate_type):
+            if ("NOT" in gate_type) or ("BUF" in gate_type) or ("INV" in gate_type):
                 ## match a port
                 a = re.search(r"\.a\([\w\d\[\]]+\)", lines[i])
                 if (a):
@@ -112,9 +112,12 @@ def remove_wires(G):
 def test(argv):
     G = v2networkx(argv[1])
     print("v2networkx done!")
-    print(nx.info(G))
-    remove_wires(G)
     # print(nx.info(G))
+    remove_wires(G)
+    M = nx.contracted_nodes(G, "N22", "N23")
+    print(nx.info(M))
+    print(M.nodes)
+    print(M.edges)
     # S = {"i_2_0_13_0"}
     # T = {"o_2_0_0_0"}
     # print(nx.cut_size(G, S, T))
