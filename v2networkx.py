@@ -45,7 +45,24 @@ def v2networkx(filePath):
             x = re.findall(r"[\w\d\[\]]+[,;]", lines[i]) # identify each wire and store in a list x
             for j in range(len(x)):
                 y = re.sub(r",|;", "", x[j]) # extract the wire name
-                G.add_node(y, type="wire") # add wire node into graph G
+                if not G.has_node(y):
+                    G.add_node(y, type="wire") # add wire node into graph G
+            continue
+
+        ## match assign
+        if re.match(r"^(\s*)assign\s+([\w\d\[\]]+\s+=\s+[\w\d\[\]\']+);$", lines[i]): 
+            x = re.split(r"\s+|=|;", lines[i]);
+            if x[-2] == "1'b1":
+                if not G.has_node("VDD"):
+                    G.add_node("VDD", type="input")
+                G.add_edge("VDD", x[2])
+            elif x[-2] == "1'b0":
+                if not G.has_node("GND"):
+                    G.add_node("GND", type="input")
+                G.add_edge("GND", x[2])
+            else:
+                G.add_node(x[2], type="BUF")
+                G.add_edge(x[-2], x[2])
             continue
 
         ## match gates

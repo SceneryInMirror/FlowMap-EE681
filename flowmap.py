@@ -306,6 +306,8 @@ def KLUT_two_outputs_mapping(LUT_G):
     KLUT_n_input[5] = []
     for lut in LUT_G.nodes:
         if LUT_G.nodes[lut]["type"] == "lut" and LUT_G.in_degree(lut) < K:
+            # print(LUT_G.in_degree(lut))
+            # print(lut)
             KLUT_n_input[LUT_G.in_degree(lut)].append(lut)
     
     # This part is hardcoded for K=6
@@ -357,6 +359,18 @@ def verilog_info(G):
     print("Number of gates:", (n_nodes - n_inputs - n_outputs))
 
 
+def LUT_input_usage(G):
+    global K
+    nlut = {}
+    for i in range(K):
+        nlut[i] = 0
+    for n in G.nodes:
+        if G.in_degree(n) < K:
+            nlut[G.in_degree(n)] += 1
+    print("LUT input usage:")
+    print(nlut)
+
+
 def main(argv):
     global K
     G = v2n.v2networkx(argv[1]) # generate a networkx graph from the netlist, where both gates, IOs, wires are nodes
@@ -372,7 +386,6 @@ def main(argv):
     #     if LUT_G.in_degree(n) < K and LUT_G.nodes[n]["type"] != "input":
     #         cnt += 1
     #     if LUT_G.in_degree(n) == 0 and LUT_G.nodes[n]["type"] != "input":
-    #         print(n)
     #         cnt0 += 1
     # print(cnt, cnt0)   
 
@@ -380,6 +393,9 @@ def main(argv):
     LUT_G3 = gate_decomposition(LUT_G2)
     LUT_G4 = predecessor_packing(LUT_G3)
     LUT_G5 = gate_decomposition(LUT_G4)
+
+    # nx_graph_info(LUT_G)
+    # nx_graph_info(LUT_G5)
 
     KLUT_two_outputs_mapping(LUT_G5)
     cust_print("Information about the KLUT design")
@@ -393,6 +409,8 @@ def main(argv):
         elif LUT_G5.nodes[l]["type"] == "lut":
             cnt1 += 1
     print("%d 1-output KLUT and %d 2-output KLUT have been used." % (cnt1, cnt2))
+
+    # LUT_input_usage(LUT_G5)
 
 
 if __name__ == "__main__":
